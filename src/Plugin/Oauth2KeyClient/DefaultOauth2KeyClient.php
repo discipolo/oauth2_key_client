@@ -8,7 +8,15 @@
 namespace Drupal\oauth2_key_client\Plugin\Oauth2KeyClient;
 
 use Drupal\oauth2_key_client\Oauth2KeyClientPluginBase;
-// TODO: turn this into KeyInput (key.module implementation) or helper form (no need for another plugin)
+// for guzzle-oauth2-plugin token retrieval helper
+
+use GuzzleHttp\Client;
+use CommerceGuys\Guzzle\Oauth2\GrantType\RefreshToken;
+use CommerceGuys\Guzzle\Oauth2\GrantType\PasswordCredentials;
+use CommerceGuys\Guzzle\Oauth2\GrantType\ClientCredentials;
+use CommerceGuys\Guzzle\Oauth2\Middleware\OAuthMiddleware;
+use GuzzleHttp\HandlerStack;
+
 /**
  * Oauth 2 pluggable Auth Form.
  *
@@ -22,7 +30,43 @@ class DefaultOauth2KeyClient extends Oauth2KeyClientPluginBase {
   protected $consumer_secret;
   protected $consumer_key;
 
+  /**
+   * {@inheritdoc}
+   */
+  public function fetchAccessToken($baseurl = 'https://example.com', $config) {
 
+
+
+    $handlerStack = HandlerStack::create();
+    $client = new Client(['handler'=> $handlerStack, 'base_uri' => $baseurl, 'auth' => 'oauth2']);
+
+    $grant = new ClientCredentials($client, $config);
+    // $grant = new PasswordCredentials($client, $config);
+
+    $refreshToken = new RefreshToken($client, $config);
+    $middleware = new OAuthMiddleware($client, $grant, $refreshToken);
+
+    $handlerStack->push($middleware->onBefore());
+    $handlerStack->push($middleware->onFailure(5));
+
+    $access_token = $middleware->getAccessToken();
+    $refresh_token = $middleware->getRefreshToken();
+    $tokens = array(
+      'access_token' => $access_token,
+      'refresh_token' => $refresh_token
+    );
+
+
+// Use $middleware->getAccessToken(); and $middleware->getRefreshToken() to get tokens
+// that can be persisted for subsequent requests.
+
+    return $tokens;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function createKeyEntity(){}
   /**
    * {@inheritdoc}
    */
@@ -35,44 +79,5 @@ class DefaultOauth2KeyClient extends Oauth2KeyClientPluginBase {
   public function settingsForm(array &$form_state) {
 
   }
-  /**
-   * {@inheritdoc}
-   *
-   * @DCG: Optional.
-   */
-  public function AuthForm() {
-    // todo use /admin/config/system/keys to store the outcome or just scrap pluggable auth forms and move to key plugins in authorizations
-    //$api_key_settings = $type->getApiKeySettings();
-    $form['consumer_key'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Consumer key'),
-      '#description' => t('The consumer key for authenticating through OAuth.'),
-      '#default_value' => $this->getConsumerKey(),
-      '#required' => TRUE,
-    );
 
-    $form['consumer_secret'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Consumer secret'),
-      '#description' => t('The consumer secret for authenticating through OAuth.'),
-      '#default_value' => $this->getConsumerSecret(),
-      '#required' => TRUE,
-    );
-kint($this);
-
-    return $form;
-  }
-  /**
-   * {@inheritdoc}
-   */
-  public function getConsumerKey() {
-    return $this->consumer_key;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function getConsumerSecret() {
-    return $this->consumer_secret;
-  }
 }
